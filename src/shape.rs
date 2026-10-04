@@ -91,4 +91,8 @@ impl Shape {
     pub fn new_inactive() -> Self{
         Self { active:false,..Default::default() }
     }
+
+    pub fn new() ->Self{
+        Self {..Default::default() }
+    }
 }

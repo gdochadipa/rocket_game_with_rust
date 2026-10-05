@@ -92,7 +92,4 @@ impl Shape {
         Self { active:false,..Default::default() }
     }
 
-    pub fn new() ->Self{
-        Self {..Default::default() }
-    }
 }

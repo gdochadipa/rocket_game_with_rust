@@ -3,15 +3,17 @@ use macroquad_particles::{Emitter};
 use std::{fs, vec};
 
 mod shape;
-use shape::*;
 
-use crate::{diagnostic::get_memory_usage_mb, enemy::EnemyPool, player::Player};
+use crate::{bullet::Bullet, diagnostic::get_memory_usage_mb, enemy::EnemyPool, player::Player};
 
 mod diagnostic;
 mod particles;
 mod enemy;
 mod player;
 mod hud;
+mod animation;
+mod bullet;
+use animation::AnimatedSprite;
 
 
 const FRAGMENT_SHADER: &str = include_str!("starfield-shader.glsl");
@@ -46,7 +48,15 @@ enum GameState{
 
 #[macroquad::main("My game")]
 async fn main() {
-    let mut bullets: Vec<Shape> = vec![];
+    let ship_texture = load_texture("assets/ship.png").await.unwrap();
+    ship_texture.set_filter(FilterMode::Nearest); // biar pxiel art ga ngeblur
+
+    let laser_texture = load_texture("assets/laser-bolts.png").await.unwrap();
+    laser_texture.set_filter(FilterMode::Nearest);
+
+    let ship_sprite = AnimatedSprite::new(ship_texture, 16.0, 24.0,0, 5, 10.0, true);
+    let bullet_sprite = AnimatedSprite::new(laser_texture.clone(), 16.0, 16.0,2, 2, 10.0, true);
+    let mut bullets: Vec<Bullet> = vec![];
     let mut gameover:bool = false;
     let colors_square = [GREEN, RED, WHITE];
     let mut shot_cooldown = 0.0f32;
@@ -56,7 +66,8 @@ async fn main() {
         .unwrap_or(0);
     let mut game_state = GameState::MainMenu;
     let mut enemy_pool = EnemyPool::new(50);
-    let mut player = Player::new(screen_width() / 2.0, screen_width() / 2.0, MOVEMENT_SPEED);
+
+    let mut player = Player::new(screen_width() / 2.0, screen_height() / 2.0, MOVEMENT_SPEED, ship_sprite);
 
     let mut direction_modifier: f32 = 0.0;
     let render_target = render_target(320, 150);
@@ -165,39 +176,32 @@ async fn main() {
                 // & itu borrowing data (reference gitu)
                 // &mut itu mengubah langsung ke asalnya
                 for bullet in &mut bullets {
-                    bullet.y -= bullet.speed * delta_time;
+                    bullet.update(delta_time);
                 }
 
                 // Remove squares below bottom of screen
                 // squares.retain(|square| square.y < screen_height() + square.size);
 
                 enemy_pool.update(delta_time, screen_height());
-                bullets.retain(|bullet| bullet.y > 0.0 - bullet.size / 2.0);
+                bullets.retain(|bullet| bullet.shape.y > 0.0 - bullet.shape.size / 2.0);
 
                 // api api
                 rocket_flame_emitter.emit(vec2(player.shape.x, player.shape.y + CIRCLE_RADIUS), 2);
 
                 // remove collided squares and bullet
                 enemy_pool.cleanup_collided();
-                bullets.retain(|bullet| !bullet.collided);
+                bullets.retain(|bullet| !bullet.shape.collided);
 
                 // handle input of the player
                 direction_modifier += player.handle_input(delta_time);
 
                 // shooting bullet
                 if is_key_down(KeyCode::Space) && shot_cooldown <= 0.0{
-                    bullets.push(Shape {
-                        x: player.shape.x,
-                        y: player.shape.y,
-                        speed: player.shape.speed * 2.0,
-                        size: 5.0,
-                        color: RED,
-                        kind: ShapeKind::Rect { width: 5.0, height: 5.0 },
-                        collided: false,
-                        ..Default::default()
-                    });
 
-                        shot_cooldown = SHOT_DELAY;
+                    let bull = Bullet::new(player.shape.x, player.shape.y, player.shape.speed * 2.0, bullet_sprite.clone());
+                    bullets.push(bull);
+
+                    shot_cooldown = SHOT_DELAY;
                 }
 
                 if is_key_pressed(KeyCode::Escape) {

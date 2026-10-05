@@ -1,7 +1,7 @@
 use macroquad::{color::Color, math::vec2, rand::{self, ChooseRandom}, window::screen_width};
 use macroquad_particles::Emitter;
 
-use crate::shape::{Shape, ShapeKind};
+use crate::{bullet::Bullet, shape::{Shape, ShapeKind}};
 
 pub struct EnemyPool {
     pool: Vec<Shape>,
@@ -78,15 +78,15 @@ impl EnemyPool {
 
        pub fn check_bullet_collisions(
             &mut self,
-            bullets: &mut Vec<Shape>,
+            bullets: &mut Vec<Bullet>,
             explosion_emitter: &mut Emitter,
             score: &mut u32,
             high_score: &mut u32,
         ) {
             for enemy in self.pool.iter_mut().filter(|e| e.active) {
-                for bullet in bullets.iter_mut().filter(|b| !b.collided) {
-                    if bullet.collides_with(enemy) {
-                        bullet.collided = true;
+                for bullet in bullets.iter_mut().filter(|b| !b.shape.collided) {
+                    if bullet.shape.collides_with(enemy) {
+                        bullet.shape.collided = true;
                         enemy.active = false; // Langsung matikan musuh
 
                         *score += enemy.size.round() as u32;

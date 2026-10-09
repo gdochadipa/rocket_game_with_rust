@@ -1,8 +1,18 @@
 [package]
-name = "my-game"
+name = "space-shooter"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-macroquad="0.4"
+macroquad = "0.4"
 macroquad-particles = "0.2.2"
+shared = { path = "shared" }
+
+[workspace]
+resolver = "2"
+members = [
+    ".",
+    "shared",
+    "server",
+    "client"
+]

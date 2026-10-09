@@ -4,7 +4,7 @@ use std::{fs, vec};
 
 mod shape;
 
-use crate::{bullet::Bullet, diagnostic::get_memory_usage_mb, enemy::EnemyPool, player::Player};
+use crate::{bullet::Bullet, diagnostic::get_memory_usage_mb, enemy::EnemyPool, player::Player, animation::{AnimatedSprite, Explosion}};
 
 mod diagnostic;
 mod particles;
@@ -13,8 +13,6 @@ mod player;
 mod hud;
 mod animation;
 mod bullet;
-use animation::AnimatedSprite;
-
 
 const FRAGMENT_SHADER: &str = include_str!("starfield-shader.glsl");
 
@@ -45,19 +43,22 @@ enum GameState{
     Gameover
 }
 
-
 #[macroquad::main("My game")]
 async fn main() {
     let ship_texture = load_texture("assets/ship.png").await.unwrap();
-    ship_texture.set_filter(FilterMode::Nearest); // biar pxiel art ga ngeblur
+    ship_texture.set_filter(FilterMode::Nearest);
 
     let laser_texture = load_texture("assets/laser-bolts.png").await.unwrap();
     laser_texture.set_filter(FilterMode::Nearest);
 
-    let ship_sprite = AnimatedSprite::new(ship_texture, 16.0, 24.0,0, 5, 10.0, true);
-    let bullet_sprite = AnimatedSprite::new(laser_texture.clone(), 16.0, 16.0,2, 2, 10.0, true);
+    let explosion_texture = load_texture("assets/explosion.png").await.unwrap();
+    explosion_texture.set_filter(FilterMode::Nearest);
+
+    let ship_sprite = AnimatedSprite::new(ship_texture, 16.0, 24.0, 0, 5, 10.0, true);
+    let bullet_sprite = AnimatedSprite::new(laser_texture.clone(), 16.0, 16.0, 2, 2, 10.0, true);
     let mut bullets: Vec<Bullet> = vec![];
-    let mut gameover:bool = false;
+    let mut explosions: Vec<Explosion> = vec![];
+    let mut gameover: bool = false;
     let colors_square = [GREEN, RED, WHITE];
     let mut shot_cooldown = 0.0f32;
     let mut score: u32 = 0;
@@ -89,7 +90,7 @@ async fn main() {
     pixel_texture.set_filter(FilterMode::Nearest);
 
     let mut explosion_emitter = Emitter::new(particles::particle_explosion(pixel_texture.clone()));
-    let mut rocket_flame_emitter = Emitter::new(particles::rocket_flame(pixel_texture.clone())); // PENTING: Biar pinggirannya ga tajam
+    let mut rocket_flame_emitter = Emitter::new(particles::rocket_flame(pixel_texture.clone()));
 
     loop {
         clear_background(BLACK);
@@ -108,8 +109,6 @@ async fn main() {
             });
         gl_use_default_material();
 
-        // load enemy to memory
-        // genereate enemy ke layar
         if rand::gen_range(0, 99) >= 95 {
             enemy_pool.spawn(&colors_square);
         }
@@ -117,9 +116,9 @@ async fn main() {
         if gameover && is_key_pressed(KeyCode::Space) {
             enemy_pool.clear();
             bullets.clear();
+            explosions.clear();
             score = 0;
-            player.shape.x = screen_width() / 2.0;
-            player.shape.y = screen_height() / 2.0;
+            player.reset(screen_width() / 2.0, screen_height() / 2.0);
             gameover = false;
 
             // buat baru
@@ -137,14 +136,18 @@ async fn main() {
         // }
 
         enemy_pool.draw();
-        for bullet in &bullets{
+        for bullet in &bullets {
             bullet.draw();
         }
 
-        // Digambar 1x saja di offset (0, 0) karena partikel menggunakan world coordinates
+        for exp in &explosions {
+            exp.draw();
+        }
+
         explosion_emitter.draw(vec2(0.0, 0.0));
 
         hud::draw_scores(score, high_score);
+        hud::draw_player_hp(player.hp, player.max_hp);
 
         if gameover {
             let text = "GAME OVER";
@@ -153,16 +156,16 @@ async fn main() {
 
         match game_state {
             GameState::MainMenu => {
-                if is_key_down(KeyCode::Escape){
+                if is_key_down(KeyCode::Escape) {
                     std::process::exit(0);
                 }
-                if is_key_pressed(KeyCode::Space){
+                if is_key_pressed(KeyCode::Space) {
                     enemy_pool.clear();
                     bullets.clear();
+                    explosions.clear();
                     player.reset(screen_width() / 2.0, screen_height() / 2.0);
                     score = 0;
                     game_state = GameState::Playing;
-                    // buat baru
                     explosion_emitter = Emitter::new(particles::particle_explosion(pixel_texture.clone()))
                 }
 
@@ -173,31 +176,27 @@ async fn main() {
             GameState::Playing => {
                 let delta_time = get_frame_time();
                 shot_cooldown = (shot_cooldown - delta_time).max(0.0);
-                // & itu borrowing data (reference gitu)
-                // &mut itu mengubah langsung ke asalnya
+
                 for bullet in &mut bullets {
                     bullet.update(delta_time);
                 }
 
-                // Remove squares below bottom of screen
-                // squares.retain(|square| square.y < screen_height() + square.size);
+                for exp in &mut explosions {
+                    exp.update(delta_time);
+                }
 
                 enemy_pool.update(delta_time, screen_height());
                 bullets.retain(|bullet| bullet.shape.y > 0.0 - bullet.shape.size / 2.0);
+                explosions.retain(|exp| !exp.sprite.finished);
 
-                // api api
                 rocket_flame_emitter.emit(vec2(player.shape.x, player.shape.y + CIRCLE_RADIUS), 2);
 
-                // remove collided squares and bullet
                 enemy_pool.cleanup_collided();
                 bullets.retain(|bullet| !bullet.shape.collided);
 
-                // handle input of the player
                 direction_modifier += player.handle_input(delta_time);
 
-                // shooting bullet
-                if is_key_down(KeyCode::Space) && shot_cooldown <= 0.0{
-
+                if is_key_down(KeyCode::Space) && shot_cooldown <= 0.0 {
                     let bull = Bullet::new(player.shape.x, player.shape.y, player.shape.speed * 2.0, bullet_sprite.clone());
                     bullets.push(bull);
 
@@ -208,18 +207,25 @@ async fn main() {
                     game_state = GameState::Paused;
                 }
 
-                enemy_pool.check_bullet_collisions(&mut bullets, &mut explosion_emitter, &mut score, &mut high_score);
+                enemy_pool.check_bullet_collisions(&mut bullets, &mut explosion_emitter, &mut explosions, &explosion_texture, &mut score, &mut high_score);
 
-                // ketika circle colliades with square
-                if enemy_pool.active_enemies_mut().any(|enemy| player.shape.collides_with(enemy)) {
-                    if score == high_score {
-                        fs::write("highscore.dat", high_score.to_string()).ok();
+                for enemy in enemy_pool.active_enemies_mut() {
+                    if player.shape.collides_with(enemy) {
+                        enemy.collided = true;
+                        if player.take_damage(1) {
+                            explosions.push(Explosion::new(player.shape.x, player.shape.y, explosion_texture.clone()));
+                        }
+                        if player.hp <= 0 {
+                            if score == high_score {
+                                fs::write("highscore.dat", high_score.to_string()).ok();
+                            }
+                            game_state = GameState::Gameover;
+                        }
                     }
-                    game_state = GameState::Gameover;
                 }
             }
             GameState::Paused => {
-                if is_key_pressed(KeyCode::Space){
+                if is_key_pressed(KeyCode::Space) {
                     game_state = GameState::Playing;
                 }
                 let text = "Paused";
@@ -236,13 +242,6 @@ async fn main() {
 
         let mem_mb = get_memory_usage_mb();
         hud::draw_debug_overlay(bullets.len(), enemy_pool.len(), mem_mb);
-
-
-        // flownya itu gini
-        // value data kayak shape (circle dan square), itu di simpen datanya,
-        // lalu value data itu kan include perpindahan posisi ya + delta_time (fps counter lah)
-        // lalu di draw deh, lalu tunggu di next frame,
-        // loop itu cepet banget, makanya kayak anmasi sebenarnya
 
         next_frame().await
     }

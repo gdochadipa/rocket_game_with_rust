@@ -27,10 +27,11 @@ jobs:
 
       - name: Prepare Deployment Directory
         run: |
-          mkdir -p ./deploy
+          mkdir -p ./deploy/assets
           cp ./target/wasm32-unknown-unknown/release/my-game.wasm ./deploy/
           cp index.html ./deploy/
           curl -o ./deploy/mq_js_bundle.js https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js
+          cp -r assets/ ./deploy/
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

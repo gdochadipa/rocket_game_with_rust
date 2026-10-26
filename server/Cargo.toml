@@ -1,0 +1,10 @@
+[package]
+name = "space-shooter-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+matchbox_socket = "0.14"
+futures = "0.3"
+futures-timer = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

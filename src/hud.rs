@@ -1,7 +1,5 @@
 use macroquad::{color::{Color, GREEN, WHITE, YELLOW}, text::{draw_text, measure_text}, time::{get_fps, get_frame_time}, window::{screen_height, screen_width}};
 
-
-
 pub fn draw_scores(score: u32, high_score: u32){
     draw_text(
         format!("Score: {}", score).as_str(),
@@ -21,17 +19,19 @@ pub fn draw_scores(score: u32, high_score: u32){
     );
 }
 
+pub fn draw_player_hp(current_hp: i32, max_hp: i32) {
+    let text = format!("HP: {}/{}", current_hp, max_hp);
+    draw_text(&text, 10.0, screen_height() - 20.0, 25.0, GREEN);
+}
+
 pub fn draw_debug_overlay(bullets_count: usize, enemies_count: usize, memory_mb: f32){
-    // Tampilkan FPS & Frame Time
     draw_text(&format!("FPS: {}", get_fps()), 10.0, 60.0, 20.0, GREEN);
     draw_text(&format!("Frame Time: {:.2} ms", get_frame_time() * 1000.0), 10.0, 80.0, 20.0, GREEN);
 
-    // Tampilkan Jumlah Objek Aktif (PENTING untuk deteksi memory leak/penumpukan)
     draw_text(&format!("Bullets: {}", bullets_count), 10.0, 120.0, 20.0, YELLOW);
     draw_text(&format!("Squares: {}", enemies_count), 10.0, 140.0, 20.0, YELLOW);
 
     draw_text(&format!("Heap RAM: {:.2} MB", memory_mb), 10.0, 100.0, 20.0, GREEN);
-
 }
 
 pub fn draw_center_message(text: &str, color: Color){

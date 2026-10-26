@@ -1,2 +1,6 @@
 /target
 .env
+opencode.json
+dist/
+
+GAME_DEVELOPMENT_GUIDE.md
